@@ -16,3 +16,14 @@ conda install root -c conda-forge
 - Models are trained separately for different categories (1 bjet and 2bjets), all eras mixed, so two notebooks per channel
 - Trained models as well as standardizing parameters (scaler) are saved in folder
 - Output writing (nominal and shape uncertainties) is done in one notebook per channel
+
+
+To save the working environment with all packages and versions so others can retrieve and run on the trained models without compatibility issue:
+```
+conda env export > environment.yml
+```
+In another machine, edit the yml file to change the env name on line 1 and prefix on last line, then run without any conda environment:
+```
+conda env create -f environment.yml
+```
+If error "ResolvePackageNotFound" appears, edit the yml file to move the packages under the pip section.
