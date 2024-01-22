@@ -97,6 +97,7 @@ class dnnEvaluator:
 
         for i in range(len(self.allfiles)):
             self.allfiles[i] = self.allfiles[i]\
+            .Filter("channel == 0", ">>> evaluate_mt_NN1b: select mutau channel")\
             .Define('mymu', mymu)\
             .Define('mytau', mytau)\
             .Define('mymet', mymet)\
@@ -180,7 +181,9 @@ class dnnEvaluator:
 
 
         for i in range(len(self.allfiles)):
-            self.allfiles[i] = self.allfiles[i].Define('mymu', mymu)\
+            self.allfiles[i] = self.allfiles[i]\
+            .Filter("channel == 0", ">>> evaluate_mt_NN2b: select mutau channel")\
+            .Define('mymu', mymu)\
             .Define('mytau', mytau)\
             .Define('mymet', mymet)\
             .Define('mytt', mytt)\
@@ -248,16 +251,17 @@ if __name__ == "__main__":
     infolder = 'test_input/'
     outfolder = 'test_output/'
 
-    inpaths  = ['postprocessed_ntuple_VBFHToTauTau.root']
+    # inpaths  = ['postprocessed_ntuple_VBFHToTauTau.root']
+    inpaths = ['davs://cmsxrootd.hep.wisc.edu:1094/store/user/skkwan/test_svfit_nominal_sync_mutau/test/mt_2018_test-VBFHToTauTau_0.root']
     outpaths = ['dnn_VBFHToTauTau.root']
 
     for i in range(len(inpaths)):
-        inpaths[i] = infolder + inpaths[i]
+        # inpaths[i] = infolder + inpaths[i]
         outpaths[i] = outfolder + outpaths[i]
 
 
-    eval1b_nominal_results = dnnEvaluator("mutau/event_tree", "mt1b", "nominal", inpaths, outpaths, "mutau/dnn_score").evaluate()
-    eval2b_nominal_results = dnnEvaluator("mutau/event_tree", "mt2b", "nominal", inpaths, outpaths, "mutau/dnn_score").evaluate()
+    eval1b_nominal_results = dnnEvaluator("event_tree", "mt1b", "nominal", inpaths, outpaths, "mutau/dnn_score").evaluate()
+    eval2b_nominal_results = dnnEvaluator("event_tree", "mt2b", "nominal", inpaths, outpaths, "mutau/dnn_score").evaluate()
 
     # Write the results into one TTree
     for i in range(len(inpaths)):
