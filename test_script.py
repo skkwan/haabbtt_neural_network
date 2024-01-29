@@ -13,6 +13,45 @@ import uproot
 
 import time
 
+# def getBranch(treeName, targetBranchName, allFiles):
+#     """
+#     Get a specific branch from a tree.
+#     """
+#     returnValue = []
+#     for filename in allFiles:
+#         f = ROOT.TFile(filename)
+#         t = f.Get(treeName)
+#         if t:
+            
+
+def preselectFilesWithTree(allFiles, treeName):
+    """
+    Given a list of paths to files (allFiles), return the subset of them (as a list of strings) that contain a valid specified tree.
+    """
+    goodFiles = []
+    for filename in allFiles:
+        f = ROOT.TFile(filename)
+        t = f.Get(treeName)
+        if t:
+            goodFiles.append(filename)
+    return goodFiles
+
+def resetBit(filename, treeName): 
+    """
+    Reset kEntriesReshuffled of a tree, given a list of paths to the ROOT files.
+    """
+    print("resetBit: doing {} {} ".format(filename, treeName))
+    f = ROOT.TFile(filename)
+    t = f.Get(treeName)
+    if not t:
+        print("resetBit: file {} does not contain TTree {}, continue".format(filename, treeName))
+    else:
+        print(t.TestBit(ROOT.TTree.EStatusBits.kEntriesReshuffled))
+        t.ResetBit(ROOT.TTree.EStatusBits.kEntriesReshuffled)
+        print(t.TestBit(ROOT.TTree.EStatusBits.kEntriesReshuffled))
+
+
+
 class dnnEvaluator:
     """
     Definition of a class for evaluating a trained DNN.
@@ -34,8 +73,12 @@ class dnnEvaluator:
         print(">>> dnnEvaluator initializer: Loaded model for {} in {} seconds!".format(self.model_name, t1 - t0))
         # Load input files as RDF
         self.allfiles = []
+        self.arrayRunLumiEvent = []
+
         for i in range(len(self.inpaths)):
-            self.allfiles.append(ROOT.RDataFrame(self.path_to_tree, self.inpaths[i]))
+            thisDf = ROOT.RDataFrame(self.path_to_tree, self.inpaths[i])
+            self.allfiles.append(thisDf)
+            self.arrayRunLumiEvent.append(thisDf.AsNumpy(["run", "lumi", "evt"]))
         t2 = time.perf_counter()
         print(">>> dnnEvaluator initializer: Loaded Tree {} in files as a list of RDF in {} seconds!".format(self.path_to_tree, t2 - t1))
 
@@ -72,8 +115,8 @@ class dnnEvaluator:
         mytau = 'ROOT::Math::PtEtaPhiMVector(pt_2_nominal, eta_2, phi_2, m_2_nominal)'
         mymet = 'ROOT::Math::PtEtaPhiMVector(met_nominal, 0, metphi_nominal, 0)'
         # Use m_sv
-        # mytt = 'ROOT::Math::PtEtaPhiMVector((mymu+mytau+mymet).Pt(),(mymu+mytau+mymet).Eta(),(mymu+mytau+mymet).Phi(),m_sv)'
-        mytt = 'mymu+mytau'#for the moment take only visible parts to reconstruct the ditau system
+        mytt = 'ROOT::Math::PtEtaPhiMVector((mymu+mytau+mymet).Pt(),(mymu+mytau+mymet).Eta(),(mymu+mytau+mymet).Phi(),m_sv)'
+        # mytt = 'mymu+mytau'#for the moment take only visible parts to reconstruct the ditau system
         myb1 = 'ROOT::Math::PtEtaPhiMVector(bpt_deepflavour_1,beta_deepflavour_1,bphi_deepflavour_1,bm_deepflavour_1)'
         m_btt = '(mytt+myb1).M()'
         m_b1mu = '(mymu+myb1).M()'
@@ -139,8 +182,8 @@ class dnnEvaluator:
         mytau = 'ROOT::Math::PtEtaPhiMVector(pt_2_nominal, eta_2, phi_2, m_2_nominal)'
         mymet = 'ROOT::Math::PtEtaPhiMVector(met_nominal, 0, metphi_nominal, 0)'
         # Use m_sv
-        #mytt = 'ROOT::Math::PtEtaPhiMVector((mymu+mytau+mymet).Pt(),(mymu+mytau+mymet).Eta(),(mymu+mytau+mymet).Phi(),m_sv)'
-        mytt = 'mymu+mytau' #for the moment take only visible parts to reconstruct the ditau system
+        mytt = 'ROOT::Math::PtEtaPhiMVector((mymu+mytau+mymet).Pt(),(mymu+mytau+mymet).Eta(),(mymu+mytau+mymet).Phi(),m_sv)'
+        # mytt = 'mymu+mytau' #for the moment take only visible parts to reconstruct the ditau system
         myb1 = 'ROOT::Math::PtEtaPhiMVector(bpt_deepflavour_1,beta_deepflavour_1,bphi_deepflavour_1,bm_deepflavour_1)'
         myb2 = 'ROOT::Math::PtEtaPhiMVector(bpt_deepflavour_2,beta_deepflavour_2,bphi_deepflavour_2,bm_deepflavour_2)'
         m_b1tt = '(mytt+myb1).M()'
@@ -154,8 +197,8 @@ class dnnEvaluator:
         m_bbmu = '(myb1+myb2+mymu).M()'
         m_bbtau = '(myb1+myb2+mytau).M()'
         # Use m_sv
-        # dm_a = '(m_bb-m_sv)/m_sv'
-        dm_a = '(m_bb-mytt.M())/mytt.M()' #for the moment m_sv = mytt.M()
+        dm_a = '(m_bb-m_sv)/m_sv'
+        # dm_a = '(m_bb-mytt.M())/mytt.M()' #for the moment m_sv = mytt.M()
         dR_tt = 'ROOT::Math::VectorUtil::DeltaR(mymu,mytau)'
         dR_b1mu = 'ROOT::Math::VectorUtil::DeltaR(mymu,myb1)'
         dR_b1tau = 'ROOT::Math::VectorUtil::DeltaR(mytau,myb1)'
@@ -248,27 +291,263 @@ class dnnEvaluator:
 
 if __name__ == "__main__":
     # Get the input files 
-    infolder = 'test_input/'
-    outfolder = 'test_output/'
+    infolder = '/eos/user/s/skkwan/hToAA/svfitted/'
+    outfolder = '/eos/user/s/skkwan/hToAA/svfitted/'
 
     # inpaths  = ['postprocessed_ntuple_VBFHToTauTau.root']
-    inpaths = ['davs://cmsxrootd.hep.wisc.edu:1094/store/user/skkwan/test_svfit_nominal_sync_mutau/test/mt_2018_test-VBFHToTauTau_0.root']
-    outpaths = ['dnn_VBFHToTauTau.root']
+    inpathsToTry = [
+    # 'DY1JetsToLL/all_2018_DY1JetsToLL-postprocessed_ntuple_DY1JetsToLL_0.root',
+    # 'DY2JetsToLL/all_2018_DY2JetsToLL-postprocessed_ntuple_DY2JetsToLL_0.root',
+    # 'DY3JetsToLL/all_2018_DY3JetsToLL-postprocessed_ntuple_DY3JetsToLL_0.root',
+    # 'DY4JetsToLL/all_2018_DY4JetsToLL-postprocessed_ntuple_DY4JetsToLL_0.root',
+    # 'DYJetsToLL_M-10to50/all_2018_DYJetsToLL_M-10to50-postprocessed_ntuple_DYJetsToLL_M-10to50_0.root',
+    # 'DYJetsToLL_M-50/all_2018_DYJetsToLL_M-50-postprocessed_ntuple_DYJetsToLL_M-50_0.root',
+    # 'EGamma-Run2018A/all_2018_EGamma-Run2018A-postprocessed_ntuple_EGamma-Run2018A_0.root',
+    # 'EGamma-Run2018A/all_2018_EGamma-Run2018A-postprocessed_ntuple_EGamma-Run2018A_1.root',
+    # 'EGamma-Run2018B/all_2018_EGamma-Run2018B-postprocessed_ntuple_EGamma-Run2018B_0.root',
+    # 'EGamma-Run2018B/all_2018_EGamma-Run2018B-postprocessed_ntuple_EGamma-Run2018B_1.root',
+    # 'EGamma-Run2018B/all_2018_EGamma-Run2018B-postprocessed_ntuple_EGamma-Run2018B_2.root',
+    # 'EGamma-Run2018C/all_2018_EGamma-Run2018C-postprocessed_ntuple_EGamma-Run2018C_0.root',
+    # 'EGamma-Run2018D/all_2018_EGamma-Run2018D-postprocessed_ntuple_EGamma-Run2018D_0.root',
+    # 'EGamma-Run2018D/all_2018_EGamma-Run2018D-postprocessed_ntuple_EGamma-Run2018D_1.root',
+    # 'EGamma-Run2018D/all_2018_EGamma-Run2018D-postprocessed_ntuple_EGamma-Run2018D_2.root',
+    # 'EGamma-Run2018D/all_2018_EGamma-Run2018D-postprocessed_ntuple_EGamma-Run2018D_3.root',
+    # 'EGamma-Run2018D/all_2018_EGamma-Run2018D-postprocessed_ntuple_EGamma-Run2018D_4.root',
+    # 'EGamma-Run2018D/all_2018_EGamma-Run2018D-postprocessed_ntuple_EGamma-Run2018D_5.root',
+    # 'EGamma-Run2018D/all_2018_EGamma-Run2018D-postprocessed_ntuple_EGamma-Run2018D_6.root',
+    # 'EGamma-Run2018D/all_2018_EGamma-Run2018D-postprocessed_ntuple_EGamma-Run2018D_7.root',
+    # 'Embedded-Run2018A-EMu/all_2018_Embedded-Run2018A-EMu-postprocessed_ntuple_Embedded-Run2018A-EMu_0.root',
+    # 'Embedded-Run2018A-EMu/all_2018_Embedded-Run2018A-EMu-postprocessed_ntuple_Embedded-Run2018A-EMu_1.root',
+    # 'Embedded-Run2018A-EMu/all_2018_Embedded-Run2018A-EMu-postprocessed_ntuple_Embedded-Run2018A-EMu_2.root',
+    # 'Embedded-Run2018A-EMu/all_2018_Embedded-Run2018A-EMu-postprocessed_ntuple_Embedded-Run2018A-EMu_3.root',
+    # 'Embedded-Run2018A-ElTau/all_2018_Embedded-Run2018A-ElTau-postprocessed_ntuple_Embedded-Run2018A-ElTau_0.root',
+    # 'Embedded-Run2018A-MuTau/all_2018_Embedded-Run2018A-MuTau-postprocessed_ntuple_Embedded-Run2018A-MuTau_0.root',
+    # 'Embedded-Run2018B-EMu/all_2018_Embedded-Run2018B-EMu-postprocessed_ntuple_Embedded-Run2018B-EMu_0.root',
+    # 'Embedded-Run2018B-ElTau/all_2018_Embedded-Run2018B-ElTau-postprocessed_ntuple_Embedded-Run2018B-ElTau_0.root',
+    # 'Embedded-Run2018B-MuTau/all_2018_Embedded-Run2018B-MuTau-postprocessed_ntuple_Embedded-Run2018B-MuTau_0.root',
+    # 'Embedded-Run2018C-EMu/all_2018_Embedded-Run2018C-EMu-postprocessed_ntuple_Embedded-Run2018C-EMu_0.root',
+    # 'Embedded-Run2018C-ElTau/all_2018_Embedded-Run2018C-ElTau-postprocessed_ntuple_Embedded-Run2018C-ElTau_0.root',
+    # 'Embedded-Run2018C-MuTau/all_2018_Embedded-Run2018C-MuTau-postprocessed_ntuple_Embedded-Run2018C-MuTau_0.root',
+    # 'Embedded-Run2018D-EMu/all_2018_Embedded-Run2018D-EMu-postprocessed_ntuple_Embedded-Run2018D-EMu_0.root',
+    # 'Embedded-Run2018D-EMu/all_2018_Embedded-Run2018D-EMu-postprocessed_ntuple_Embedded-Run2018D-EMu_1.root',
+    # 'Embedded-Run2018D-EMu/all_2018_Embedded-Run2018D-EMu-postprocessed_ntuple_Embedded-Run2018D-EMu_2.root',
+    # 'Embedded-Run2018D-EMu/all_2018_Embedded-Run2018D-EMu-postprocessed_ntuple_Embedded-Run2018D-EMu_3.root',
+    # 'Embedded-Run2018D-EMu/all_2018_Embedded-Run2018D-EMu-postprocessed_ntuple_Embedded-Run2018D-EMu_4.root',
+    # 'Embedded-Run2018D-EMu/all_2018_Embedded-Run2018D-EMu-postprocessed_ntuple_Embedded-Run2018D-EMu_5.root',
+    # 'Embedded-Run2018D-EMu/all_2018_Embedded-Run2018D-EMu-postprocessed_ntuple_Embedded-Run2018D-EMu_6.root',
+    # 'Embedded-Run2018D-ElTau/all_2018_Embedded-Run2018D-ElTau-postprocessed_ntuple_Embedded-Run2018D-ElTau_0.root',
+    # 'Embedded-Run2018D-ElTau/all_2018_Embedded-Run2018D-ElTau-postprocessed_ntuple_Embedded-Run2018D-ElTau_1.root',
+    # 'Embedded-Run2018D-ElTau/all_2018_Embedded-Run2018D-ElTau-postprocessed_ntuple_Embedded-Run2018D-ElTau_2.root',
+    # 'Embedded-Run2018D-ElTau/all_2018_Embedded-Run2018D-ElTau-postprocessed_ntuple_Embedded-Run2018D-ElTau_3.root',
+    # 'Embedded-Run2018D-ElTau/all_2018_Embedded-Run2018D-ElTau-postprocessed_ntuple_Embedded-Run2018D-ElTau_4.root',
+    # 'Embedded-Run2018D-ElTau/all_2018_Embedded-Run2018D-ElTau-postprocessed_ntuple_Embedded-Run2018D-ElTau_5.root',
+    # 'Embedded-Run2018D-MuTau/all_2018_Embedded-Run2018D-MuTau-postprocessed_ntuple_Embedded-Run2018D-MuTau_0.root',
+    # 'Embedded-Run2018D-MuTau/all_2018_Embedded-Run2018D-MuTau-postprocessed_ntuple_Embedded-Run2018D-MuTau_1.root',
+    # 'Embedded-Run2018D-MuTau/all_2018_Embedded-Run2018D-MuTau-postprocessed_ntuple_Embedded-Run2018D-MuTau_2.root',
+    # 'Embedded-Run2018D-MuTau/all_2018_Embedded-Run2018D-MuTau-postprocessed_ntuple_Embedded-Run2018D-MuTau_3.root',
+    # 'Embedded-Run2018D-MuTau/all_2018_Embedded-Run2018D-MuTau-postprocessed_ntuple_Embedded-Run2018D-MuTau_4.root',
+    # 'GluGluHToTauTau/all_2018_GluGluHToTauTau-postprocessed_ntuple_GluGluHToTauTau_0.root',
+    # 'GluGluHToWWTo2L2Nu/all_2018_GluGluHToWWTo2L2Nu-postprocessed_ntuple_GluGluHToWWTo2L2Nu_0.root',
+    # 'GluGluZH_HToWWTo2L2Nu/all_2018_GluGluZH_HToWWTo2L2Nu-postprocessed_ntuple_GluGluZH_HToWWTo2L2Nu_0.root',
+    # 'GluGluZH_HToWW_ZTo2L/all_2018_GluGluZH_HToWW_ZTo2L-postprocessed_ntuple_GluGluZH_HToWW_ZTo2L_0.root',
+    # 'HWminusJ_HToWW/all_2018_HWminusJ_HToWW-postprocessed_ntuple_HWminusJ_HToWW_0.root',
+    # 'HWplusJ_HToWW/all_2018_HWplusJ_HToWW-postprocessed_ntuple_HWplusJ_HToWW_0.root',
+    # 'HZJ_HToWW/all_2018_HZJ_HToWW-postprocessed_ntuple_HZJ_HToWW_0.root',
+    # 'MuonEG-Run2018A/all_2018_MuonEG-Run2018A-postprocessed_ntuple_MuonEG-Run2018A_0.root',
+    # 'MuonEG-Run2018B/all_2018_MuonEG-Run2018B-postprocessed_ntuple_MuonEG-Run2018B_0.root',
+    # 'MuonEG-Run2018C/all_2018_MuonEG-Run2018C-postprocessed_ntuple_MuonEG-Run2018C_0.root',
+    # 'MuonEG-Run2018D/all_2018_MuonEG-Run2018D-postprocessed_ntuple_MuonEG-Run2018D_0.root',
+    # 'ST_t-channel_antitop/all_2018_ST_t-channel_antitop-postprocessed_ntuple_ST_t-channel_antitop_0.root',
+    # 'ST_t-channel_top/all_2018_ST_t-channel_top-postprocessed_ntuple_ST_t-channel_top_0.root',
+    # 'ST_t-channel_top/all_2018_ST_t-channel_top-postprocessed_ntuple_ST_t-channel_top_1.root',
+    # 'ST_t-channel_top/all_2018_ST_t-channel_top-postprocessed_ntuple_ST_t-channel_top_2.root',
+    # 'ST_tW_antitop/all_2018_ST_tW_antitop-postprocessed_ntuple_ST_tW_antitop_0.root',
+    # 'ST_tW_top/all_2018_ST_tW_top-postprocessed_ntuple_ST_tW_top_0.root',
+    # 'SUSYGluGluToHToAA_AToBB_AToTauTau_M-45/all_2018_SUSYGluGluToHToAA_AToBB_AToTauTau_M-45-postprocessed_ntuple_SUSYGluGluToHToAA_AToBB_AToTauTau_M-45_0.root',
+    'SUSYVBFHToAA_AToBB_AToTauTau_M-45/all_2018_SUSYVBFHToAA_AToBB_AToTauTau_M-45-postprocessed_ntuple_SUSYVBFHToAA_AToBB_AToTauTau_M-45_0.root',
+    # 'SingleMuon-Run2018A/all_2018_SingleMuon-Run2018A-postprocessed_ntuple_SingleMuon-Run2018A_0.root',
+    # 'SingleMuon-Run2018A/all_2018_SingleMuon-Run2018A-postprocessed_ntuple_SingleMuon-Run2018A_1.root',
+    # 'SingleMuon-Run2018B/all_2018_SingleMuon-Run2018B-postprocessed_ntuple_SingleMuon-Run2018B_0.root',
+    # 'SingleMuon-Run2018B/all_2018_SingleMuon-Run2018B-postprocessed_ntuple_SingleMuon-Run2018B_1.root',
+    # 'SingleMuon-Run2018C/all_2018_SingleMuon-Run2018C-postprocessed_ntuple_SingleMuon-Run2018C_0.root',
+    # 'SingleMuon-Run2018D/all_2018_SingleMuon-Run2018D-postprocessed_ntuple_SingleMuon-Run2018D_0.root',
+    # 'SingleMuon-Run2018D/all_2018_SingleMuon-Run2018D-postprocessed_ntuple_SingleMuon-Run2018D_1.root',
+    # 'SingleMuon-Run2018D/all_2018_SingleMuon-Run2018D-postprocessed_ntuple_SingleMuon-Run2018D_2.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_0.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_1.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_10.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_11.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_12.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_13.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_14.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_15.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_16.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_17.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_18.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_19.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_2.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_20.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_21.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_22.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_23.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_24.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_25.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_26.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_27.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_28.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_29.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_3.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_30.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_4.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_5.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_6.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_7.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_8.root',
+    # 'TTTo2L2Nu/all_2018_TTTo2L2Nu-postprocessed_ntuple_TTTo2L2Nu_9.root',
+    # 'TTToHadronic/all_2018_TTToHadronic-postprocessed_ntuple_TTToHadronic_0.root',
+    # 'TTToHadronic/all_2018_TTToHadronic-postprocessed_ntuple_TTToHadronic_1.root',
+    # 'TTToHadronic/all_2018_TTToHadronic-postprocessed_ntuple_TTToHadronic_2.root',
+    # 'TTToHadronic/all_2018_TTToHadronic-postprocessed_ntuple_TTToHadronic_3.root',
+    # 'TTToHadronic/all_2018_TTToHadronic-postprocessed_ntuple_TTToHadronic_4.root',
+    # 'TTToHadronic/all_2018_TTToHadronic-postprocessed_ntuple_TTToHadronic_5.root',
+    # 'TTToHadronic/all_2018_TTToHadronic-postprocessed_ntuple_TTToHadronic_6.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_0.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_1.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_10.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_11.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_12.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_13.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_14.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_15.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_16.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_17.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_18.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_19.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_2.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_20.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_21.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_22.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_23.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_24.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_25.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_26.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_27.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_28.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_29.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_3.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_30.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_31.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_32.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_33.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_34.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_35.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_36.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_37.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_38.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_39.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_4.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_40.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_41.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_42.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_43.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_44.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_45.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_46.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_47.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_48.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_49.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_5.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_50.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_51.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_52.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_53.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_54.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_55.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_56.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_57.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_58.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_59.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_6.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_60.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_61.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_62.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_63.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_64.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_65.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_66.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_67.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_68.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_69.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_7.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_70.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_71.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_72.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_73.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_74.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_75.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_76.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_77.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_78.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_8.root',
+    # 'TTToSemiLeptonic/all_2018_TTToSemiLeptonic-postprocessed_ntuple_TTToSemiLeptonic_9.root',
+    # 'VBFHToTauTau/all_2018_VBFHToTauTau-postprocessed_ntuple_VBFHToTauTau_0.root',
+    # 'VBFHToWWTo2L2Nu/all_2018_VBFHToWWTo2L2Nu-postprocessed_ntuple_VBFHToWWTo2L2Nu_0.root',
+    # 'VVTo2L2Nu/all_2018_VVTo2L2Nu-postprocessed_ntuple_VVTo2L2Nu_0.root',
+    # 'VVTo2L2Nu/all_2018_VVTo2L2Nu-postprocessed_ntuple_VVTo2L2Nu_1.root',
+    # 'VVTo2L2Nu/all_2018_VVTo2L2Nu-postprocessed_ntuple_VVTo2L2Nu_2.root',
+    # 'W1JetsToLNu/all_2018_W1JetsToLNu-postprocessed_ntuple_W1JetsToLNu_0.root',
+    # 'W2JetsToLNu/all_2018_W2JetsToLNu-postprocessed_ntuple_W2JetsToLNu_0.root',
+    # 'W3JetsToLNu/all_2018_W3JetsToLNu-postprocessed_ntuple_W3JetsToLNu_0.root',
+    # 'W4JetsToLNu/all_2018_W4JetsToLNu-postprocessed_ntuple_W4JetsToLNu_0.root',
+    # 'WJetsToLNu/all_2018_WJetsToLNu-postprocessed_ntuple_WJetsToLNu_0.root',
+    # 'WZTo2Q2L/all_2018_WZTo2Q2L-postprocessed_ntuple_WZTo2Q2L_0.root',
+    # 'WZTo3LNu/all_2018_WZTo3LNu-postprocessed_ntuple_WZTo3LNu_0.root',
+    # 'WminusHToTauTau/all_2018_WminusHToTauTau-postprocessed_ntuple_WminusHToTauTau_0.root',
+    # 'WplusHToTauTau/all_2018_WplusHToTauTau-postprocessed_ntuple_WplusHToTauTau_0.root',
+    # 'ZHToTauTau/all_2018_ZHToTauTau-postprocessed_ntuple_ZHToTauTau_0.root',
+    # 'ZZTo2Q2L/all_2018_ZZTo2Q2L-postprocessed_ntuple_ZZTo2Q2L_0.root',
+    # 'ZZTo4L/all_2018_ZZTo4L-postprocessed_ntuple_ZZTo4L_0.root',
+    # 'ttHToNonbb/all_2018_ttHToNonbb-postprocessed_ntuple_ttHToNonbb_0.root',
+    # 'ttHTobb/all_2018_ttHTobb-postprocessed_ntuple_ttHTobb_0.root',
+    # 'ttHTobb/all_2018_ttHTobb-postprocessed_ntuple_ttHTobb_1.root',
+    # 'ttHTobb/all_2018_ttHTobb-postprocessed_ntuple_ttHTobb_2.root',
+    # 'ttHTobb/all_2018_ttHTobb-postprocessed_ntuple_ttHTobb_3.root'
+    ]
 
-    for i in range(len(inpaths)):
-        # inpaths[i] = infolder + inpaths[i]
-        outpaths[i] = outfolder + outpaths[i]
+    # Initialize
+    for i in range(len(inpathsToTry)):
+        inpathsToTry[i] = infolder + inpathsToTry[i]
 
+    # Make list of files that have mutau/event_tree
+    inpathsMuTau = preselectFilesWithTree(inpathsToTry, "mutau/event_tree")
 
-    eval1b_nominal_results = dnnEvaluator("event_tree", "mt1b", "nominal", inpaths, outpaths, "mutau/dnn_score").evaluate()
-    eval2b_nominal_results = dnnEvaluator("event_tree", "mt2b", "nominal", inpaths, outpaths, "mutau/dnn_score").evaluate()
+    outpathsMuTau = [""] * len(inpathsMuTau)
+
+    # print(inpathsMuTau)
+    print(type(inpathsMuTau[0]))
+
+    for i in range(len(inpathsMuTau)):
+        # Reset "shuffled" bit
+        resetBit(inpathsMuTau[i], "mutau/event_tree")
+        # sampleName = inpaths[i].split("/")[0]
+       # outpaths[i] = inpaths[i][:]
+        outpathsMuTau[i] = inpathsMuTau[i][:].replace("all_2018","dnn_score").replace("postprocessed_ntuple", "dnn_score")
+        print(">>> Input path: {}, output path: {}".format(inpathsMuTau[i], outpathsMuTau[i]))
+
+    my1b = dnnEvaluator("mutau/event_tree", "mt1b", "nominal", inpathsMuTau, outpathsMuTau, "mutau/dnn_score")
+    my2b = dnnEvaluator("mutau/event_tree", "mt2b", "nominal", inpathsMuTau, outpathsMuTau, "mutau/dnn_score")
+    eval1b_nominal_results = my1b.evaluate()
+    eval2b_nominal_results = my2b.evaluate()
 
     # Write the results into one TTree
-    for i in range(len(inpaths)):
-        with uproot.recreate(outpaths[i]) as file:
-            print(type(eval1b_nominal_results[i]))
-            print(eval1b_nominal_results[i])
+    for i in range(len(inpathsMuTau)):
+        with uproot.recreate(outpathsMuTau[i]) as file:
+            # print(type(eval1b_nominal_results[i]))
+            # print(eval1b_nominal_results[i])
             file["mutau/dnn_score"] = {"1bNN_nominal": eval1b_nominal_results[i],
-                                       "2bNN_nominal": eval2b_nominal_results[i]}
+                                       "2bNN_nominal": eval2b_nominal_results[i],
+                                       "run":  my1b.arrayRunLumiEvent[i]["run"],
+                                       "lumi": my1b.arrayRunLumiEvent[i]["lumi"],
+                                       "evt":  my1b.arrayRunLumiEvent[i]["evt"]}
 
 
