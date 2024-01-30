@@ -5,7 +5,7 @@
 
 import ROOT
 
-inpathsMuTau = ['/eos/user/s/skkwan/hToAA/svfitted/SUSYVBFHToAA_AToBB_AToTauTau_M-45/all_2018_SUSYVBFHToAA_AToBB_AToTauTau_M-45-postprocessed_ntuple_SUSYVBFHToAA_AToBB_AToTauTau_M-45_0.root']
+inpathsMuTau = ['/afs/cern.ch/work/s/skkwan/public/forPallabi/all_2018_SUSYVBFHToAA_AToBB_AToTauTau_M-45-postprocessed_ntuple_SUSYVBFHToAA_AToBB_AToTauTau_M-45_0.root']
 
 
 # Write the results into one TTree
